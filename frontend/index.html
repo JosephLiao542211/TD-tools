@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <head>
+    <title>My App</title>
+  </head>
+  <body>
+    <h1>Frontend</h1>
+    <button onclick="getData()">Fetch Data</button>
+    <p id="result"></p>
+
+    <script>
+      async function getData() {
+        const response = await fetch("/api/data");
+        const data = await response.json();
+        document.getElementById("result").textContent = data.message;
+      }
+    </script>
+  </body>
+</html>
