@@ -1,0 +1,28 @@
+run = "cd backend && npm install && npm start"
+language = "nodejs"
+entrypoint = "backend/server.js"
+
+[nix]
+channel = "stable-21_11"
+
+[deployment]
+run = ["sh", "-c", "cd backend && npm install && npm start"]
+deploymentTarget = "cloudrun"
+
+[env]
+PATH = "/home/runner/$REPL_SLUG/.config/npm/node_global/bin:/home/runner/$REPL_SLUG/node_modules/.bin"
+npm_config_prefix = "/home/runner/$REPL_SLUG/.config/npm/node_global"
+
+[packager]
+language = "nodejs"
+
+[packager.features]
+packageSearch = true
+guessImports = true
+enabledForHosting = false
+
+[languages.javascript]
+pattern = "**/{*.js,*.jsx,*.ts,*.tsx}"
+
+[languages.javascript.languageServer]
+start = "typescript-language-server --stdio"
