@@ -1,3 +1,5 @@
+const { getIntelligentSystemPrompt } = require('../prompts/systemPrompts');
+
 class ChatController {
   constructor(services) {
     this.claudeClient = services.claudeClient;
@@ -47,8 +49,20 @@ class ChatController {
         this.conversationManager.getMessages(sessionId)
       );
 
-      // Stream response from Claude
-      const stream = await this.claudeClient.streamMessage(messages);
+      // Get intelligent system prompt based on conversation context
+      const conversationHistory = this.conversationManager.getMessages(sessionId);
+      const systemPrompt = getIntelligentSystemPrompt(message, conversationHistory);
+
+      // Log prompt mode for debugging
+      this.logger.info('Using system prompt for session', {
+        sessionId,
+        promptLength: systemPrompt.length
+      });
+
+      // Stream response from Claude with system prompt
+      const stream = await this.claudeClient.streamMessage(messages, {
+        system: systemPrompt
+      });
 
       await this.streamHandler.handleStream(stream, sessionId, res);
 
