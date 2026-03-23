@@ -578,6 +578,65 @@
       color: #58a6ff;
       font-weight: 600;
     }
+
+    /* Storage panel */
+    .storage-toggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: #238636;
+      border: 1px solid #238636;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      z-index: 100;
+      font-weight: 600;
+    }
+    .storage-toggle:hover { background: #2ea043; }
+
+    .storage-panel {
+      display: none;
+      position: fixed;
+      top: 50px;
+      right: 16px;
+      width: 300px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      font-size: 13px;
+    }
+    .storage-panel.open { display: block; }
+    .storage-panel h3 { color: #58a6ff; margin-bottom: 12px; font-size: 13px; }
+    .storage-section { margin-bottom: 16px; }
+    .storage-section label { display: block; color: #8b949e; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; }
+    .storage-panel input[type="file"] { width: 100%; color: #c9d1d9; font-family: inherit; font-size: 12px; }
+    .storage-panel input[type="text"] {
+      width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+      padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 13px; outline: none;
+      text-transform: uppercase; letter-spacing: 2px;
+    }
+    .storage-btn {
+      width: 100%; background: #238636; border: none; color: white;
+      padding: 8px; border-radius: 4px; font-family: inherit; font-size: 12px;
+      font-weight: 600; cursor: pointer; margin-top: 6px;
+    }
+    .storage-btn:hover { background: #2ea043; }
+    .storage-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .storage-code-display {
+      background: #0d1117; border: 1px solid #3fb950; border-radius: 4px;
+      padding: 10px; text-align: center; margin-top: 8px; display: none;
+    }
+    .storage-code-display .code { font-size: 24px; font-weight: 700; color: #3fb950; letter-spacing: 4px; }
+    .storage-code-display .hint { font-size: 11px; color: #6e7681; margin-top: 4px; }
+    .storage-msg { margin-top: 6px; font-size: 12px; }
+    .storage-msg.error { color: #f85149; }
+    .storage-msg.success { color: #3fb950; }
   </style>
 </head>
 <body>
@@ -629,6 +688,102 @@
       </div>
     </div>
   </div>
+
+  <!-- Storage Panel -->
+  <button class="storage-toggle" onclick="toggleStorage()">⬆ Storage</button>
+  <div class="storage-panel" id="storagePanel">
+    <h3>⬆ Temp File Storage</h3>
+
+    <div class="storage-section">
+      <label>Upload File (expires in 24h)</label>
+      <input type="file" id="storageFile" />
+      <button class="storage-btn" id="uploadBtn" onclick="uploadFile()">Upload & Get Code</button>
+      <div class="storage-code-display" id="codeDisplay">
+        <div class="code" id="uploadCode"></div>
+        <div class="hint">Share this code to download</div>
+      </div>
+      <div class="storage-msg" id="uploadMsg"></div>
+    </div>
+
+    <div class="storage-section">
+      <label>Download by Code</label>
+      <input type="text" id="downloadCode" placeholder="XXXXXX" maxlength="6" />
+      <button class="storage-btn" id="downloadBtn" onclick="downloadFile()">Download</button>
+      <div class="storage-msg" id="downloadMsg"></div>
+    </div>
+  </div>
+
+  <script>
+    function toggleStorage() {
+      document.getElementById('storagePanel').classList.toggle('open');
+    }
+
+    async function uploadFile() {
+      const fileInput = document.getElementById('storageFile');
+      const btn = document.getElementById('uploadBtn');
+      const msg = document.getElementById('uploadMsg');
+      const codeDisplay = document.getElementById('codeDisplay');
+
+      if (!fileInput.files[0]) { msg.className = 'storage-msg error'; msg.textContent = 'Select a file first.'; return; }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+      msg.textContent = '';
+      codeDisplay.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/storage/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        document.getElementById('uploadCode').textContent = data.code;
+        codeDisplay.style.display = 'block';
+        msg.className = 'storage-msg success';
+        msg.textContent = `"${data.filename}" uploaded. Expires in ${data.expiresIn}.`;
+      } catch (e) {
+        msg.className = 'storage-msg error';
+        msg.textContent = e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload & Get Code';
+      }
+    }
+
+    async function downloadFile() {
+      const code = document.getElementById('downloadCode').value.trim().toUpperCase();
+      const btn = document.getElementById('downloadBtn');
+      const msg = document.getElementById('downloadMsg');
+
+      if (code.length !== 6) { msg.className = 'storage-msg error'; msg.textContent = 'Enter a 6-character code.'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Downloading...';
+      msg.textContent = '';
+
+      try {
+        const res = await fetch(`/api/storage/download/${code}`);
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Download failed'); }
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="(.+?)"/);
+        const filename = match ? match[1] : 'download';
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+        msg.className = 'storage-msg success';
+        msg.textContent = `Downloaded "${filename}".`;
+      } catch (e) {
+        msg.className = 'storage-msg error';
+        msg.textContent = e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Download';
+      }
+    }
+  </script>
 
   <script>
     // Generate a session ID for this chat session

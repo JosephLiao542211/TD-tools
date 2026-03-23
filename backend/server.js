@@ -4,6 +4,7 @@ const path = require('path');
 const initializeServices = require('./config/services');
 const chatRoutes = require('./routes/chat');
 const healthRoutes = require('./routes/health');
+const storageRoutes = require('./routes/storage');
 const corsHandler = require('./middleware/corsHandler');
 const errorHandler = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/requestLogger');
@@ -26,6 +27,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // API Routes
 app.use('/api/chat', chatRoutes(services.chatController));
 app.use('/api/health', healthRoutes(services.healthChecker));
+app.use('/api/storage', storageRoutes);
 
 // Root endpoint
 app.get('/api', (req, res) => {
