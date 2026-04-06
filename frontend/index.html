@@ -716,6 +716,83 @@
       padding: 8px; margin-bottom: 10px; font-size: 11px; color: #8b949e;
       max-height: 100px; overflow-y: auto;
     }
+
+    /* Board panel */
+    .board-toggle {
+      position: fixed;
+      top: 16px;
+      right: 240px;
+      background: #6e40c9;
+      border: 1px solid #6e40c9;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      z-index: 100;
+      font-weight: 600;
+    }
+    .board-toggle:hover { background: #8957e5; }
+    .board-panel {
+      display: none;
+      position: fixed;
+      top: 50px;
+      right: 16px;
+      width: 340px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      font-size: 13px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .board-panel.open { display: block; }
+    .board-panel h3 { color: #8957e5; margin-bottom: 12px; font-size: 13px; }
+    .board-form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .board-form input[type="text"] {
+      background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+      padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;
+    }
+    .board-form textarea {
+      background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+      padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;
+      resize: vertical; min-height: 60px;
+    }
+    .board-post-btn {
+      background: #6e40c9; border: none; color: white;
+      padding: 7px; border-radius: 4px; font-family: inherit; font-size: 12px;
+      font-weight: 600; cursor: pointer;
+    }
+    .board-post-btn:hover { background: #8957e5; }
+    .board-card {
+      background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
+      padding: 10px; margin-bottom: 8px;
+    }
+    .board-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .board-card-name { color: #8957e5; font-weight: 600; font-size: 12px; }
+    .board-card-time { color: #6e7681; font-size: 10px; }
+    .board-card-body { color: #c9d1d9; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+    .board-card-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .board-copy-btn {
+      background: #21262d; border: 1px solid #30363d; color: #8b949e;
+      padding: 3px 10px; border-radius: 4px; font-family: inherit; font-size: 11px; cursor: pointer;
+    }
+    .board-copy-btn:hover { background: #238636; border-color: #238636; color: white; }
+    .board-del-btn {
+      background: transparent; border: none; color: #484f58;
+      font-family: inherit; font-size: 11px; cursor: pointer; padding: 3px 6px;
+    }
+    .board-del-btn:hover { color: #f85149; }
+    .board-empty { color: #6e7681; font-size: 12px; text-align: center; padding: 16px 0; }
+    .board-clear-btn {
+      width: 100%; background: transparent; border: 1px solid #30363d; color: #6e7681;
+      padding: 5px; border-radius: 4px; font-family: inherit; font-size: 11px; cursor: pointer; margin-top: 4px;
+    }
+    .board-clear-btn:hover { border-color: #f85149; color: #f85149; }
   </style>
 </head>
 <body>
@@ -766,6 +843,19 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- Board Panel -->
+  <button class="board-toggle" onclick="toggleBoard()">&#128172; Board</button>
+  <div class="board-panel" id="boardPanel">
+    <h3>&#128172; Message Board</h3>
+    <div class="board-form">
+      <input type="text" id="boardName" placeholder="Your name" maxlength="40" />
+      <textarea id="boardMsg" placeholder="Your message..." maxlength="1000"></textarea>
+      <button class="board-post-btn" onclick="boardPost()">Post</button>
+    </div>
+    <div id="boardMessages"><div class="board-empty">No messages yet.</div></div>
+    <button class="board-clear-btn" onclick="boardClearAll()">Clear All</button>
   </div>
 
   <!-- Confluence Panel -->
@@ -829,8 +919,8 @@
     function toggleConfluence() {
       const panel = document.getElementById('confluencePanel');
       panel.classList.toggle('open');
-      // Close storage if open
       document.getElementById('storagePanel').classList.remove('open');
+      document.getElementById('boardPanel').classList.remove('open');
     }
 
     function setConfluenceMsg(text, type) {
@@ -983,10 +1073,80 @@
   </script>
 
   <script>
+    function toggleBoard() {
+      document.getElementById('boardPanel').classList.toggle('open');
+      document.getElementById('storagePanel').classList.remove('open');
+      document.getElementById('confluencePanel').classList.remove('open');
+      if (document.getElementById('boardPanel').classList.contains('open')) boardLoad();
+    }
+
+    function boardEsc(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function boardLoad() {
+      const res = await fetch('/api/board');
+      const msgs = await res.json();
+      const el = document.getElementById('boardMessages');
+      if (!msgs.length) { el.innerHTML = '<div class="board-empty">No messages yet.</div>'; return; }
+      el.innerHTML = msgs.slice().reverse().map(m => `
+        <div class="board-card" id="bcard-${m.id}">
+          <div class="board-card-header">
+            <span class="board-card-name">${boardEsc(m.name)}</span>
+            <span class="board-card-time">${new Date(m.timestamp).toLocaleTimeString()}</span>
+          </div>
+          <div class="board-card-body">${boardEsc(m.message)}</div>
+          <div class="board-card-actions">
+            <button class="board-copy-btn" onclick="boardCopy(${m.id})">Copy</button>
+            <button class="board-del-btn" onclick="boardDel(${m.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function boardPost() {
+      const name = document.getElementById('boardName').value.trim();
+      const message = document.getElementById('boardMsg').value.trim();
+      if (!name || !message) return;
+      await fetch('/api/board', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, message })
+      });
+      document.getElementById('boardMsg').value = '';
+      boardLoad();
+    }
+
+    async function boardDel(id) {
+      await fetch('/api/board/' + id, { method: 'DELETE' });
+      boardLoad();
+    }
+
+    async function boardClearAll() {
+      if (!confirm('Clear all messages?')) return;
+      await fetch('/api/board', { method: 'DELETE' });
+      boardLoad();
+    }
+
+    async function boardCopy(id) {
+      const card = document.getElementById('bcard-' + id);
+      const text = card.querySelector('.board-card-body').textContent;
+      await navigator.clipboard.writeText(text);
+      const btn = card.querySelector('.board-copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    }
+
+    // Auto-refresh board when open
+    setInterval(() => {
+      if (document.getElementById('boardPanel').classList.contains('open')) boardLoad();
+    }, 10000);
+
     function toggleStorage() {
       document.getElementById('storagePanel').classList.toggle('open');
-      // Close confluence if open
+      // Close confluence and board if open
       document.getElementById('confluencePanel').classList.remove('open');
+      document.getElementById('boardPanel').classList.remove('open');
     }
 
     async function uploadFile() {
