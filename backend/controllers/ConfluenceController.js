@@ -23,6 +23,20 @@ class ConfluenceController {
     this.logger = logger;
   }
 
+  /**
+   * GET /api/confluence/client-config
+   * Returns the PAT so the browser can call Confluence directly.
+   * Safe because this server only runs on localhost for personal use.
+   */
+  clientConfig(req, res) {
+    const pat = process.env.ATLASSIAN_PAT;
+    console.log('[Confluence] clientConfig() — PAT present:', !!pat);
+    if (!pat) {
+      return res.status(500).json({ error: true, message: 'ATLASSIAN_PAT not set in server .env' });
+    }
+    res.json({ pat });
+  }
+
   async fill(req, res) {
     console.log('[Confluence] fill() called');
     console.log('[Confluence] Request body keys:', Object.keys(req.body));
@@ -130,10 +144,12 @@ Please complete every checklist item and return the filled checklist followed by
    * Useful for debugging / confirming the parser sees the right content.
    */
   async preview(req, res) {
-    console.log('[Confluence] preview() called. Query:', req.query);
+    // Accept params from body (POST) or query string (GET)
+    const params = req.method === 'POST' ? req.body : req.query;
+    console.log('[Confluence] preview() called via', req.method, '| keys:', Object.keys(params));
 
     try {
-      const { url, rawHtml, title: titleOverride } = req.query;
+      const { url, rawHtml, title: titleOverride } = params;
       const pat = process.env.ATLASSIAN_PAT;
 
       console.log('[Confluence] PAT present:', !!pat);

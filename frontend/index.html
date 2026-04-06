@@ -852,6 +852,47 @@
       }).catch(() => setConfluenceMsg('Copy failed — select text manually.', 'error'));
     }
 
+    // Fetch the Confluence page HTML directly from the browser (browser is on TD network)
+    async function fetchConfluencePageFromBrowser(url) {
+      console.log('[Confluence] Fetching PAT from server config...');
+      const configRes = await fetch('/api/confluence/client-config');
+      if (!configRes.ok) {
+        const d = await configRes.json().catch(() => ({}));
+        throw new Error(d.message || 'Could not load PAT from server');
+      }
+      const { pat } = await configRes.json();
+      console.log('[Confluence] PAT loaded. Parsing page URL...');
+
+      // Extract page ID from URL: /pages/{id}/
+      const pageIdMatch = url.match(/\/pages\/(\d+)/);
+      if (!pageIdMatch) throw new Error('Could not extract page ID from URL (expected /pages/{id}/)');
+      const pageId = pageIdMatch[1];
+
+      const parsed = new URL(url);
+      const apiUrl = `${parsed.protocol}//${parsed.hostname}/rest/api/content/${pageId}?expand=body.storage,title,version`;
+      console.log('[Confluence] Browser fetching:', apiUrl);
+
+      const pageRes = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${pat}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      console.log('[Confluence] Confluence API status:', pageRes.status);
+      if (!pageRes.ok) {
+        const errText = await pageRes.text().catch(() => '');
+        throw new Error(`Confluence API ${pageRes.status}: ${pageRes.statusText}. ${errText.slice(0, 200)}`);
+      }
+
+      const data = await pageRes.json();
+      console.log('[Confluence] Page title:', data.title, '| HTML length:', data.body?.storage?.value?.length);
+      return {
+        title: data.title,
+        rawHtml: data.body?.storage?.value || '',
+      };
+    }
+
     async function confluencePreview() {
       const url = document.getElementById('confluenceUrl').value.trim();
       const btn = document.getElementById('confluencePreviewBtn');
@@ -861,19 +902,26 @@
 
       btn.disabled = true;
       btn.textContent = 'Loading...';
-      setConfluenceMsg('Fetching page structure...', '');
+      setConfluenceMsg('Browser fetching Confluence page...', '');
       preview.style.display = 'none';
 
       try {
-        const res = await fetch(`/api/confluence/preview?url=${encodeURIComponent(url)}`);
+        const { title, rawHtml } = await fetchConfluencePageFromBrowser(url);
+
+        setConfluenceMsg('Parsing page structure...', '');
+        const res = await fetch('/api/confluence/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawHtml, title }),
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Preview failed');
 
         const taskLines = data.tasks.length > 0
           ? data.tasks.map(t => `${t.status === 'complete' ? '[x]' : '[ ]'} ${t.body}`).join('\n')
-          : '(no ac:task-list items found)';
+          : '(no ac:task-list items found — page may use a different checklist format)';
 
-        const sectionLines = data.sections.map(s => `  ${s.heading}`).join('\n');
+        const sectionLines = data.sections.map(s => `  ${s.heading}`).join('\n') || '  (none)';
 
         preview.style.display = 'block';
         preview.textContent =
@@ -882,7 +930,11 @@
         setConfluenceMsg(`Found ${data.tasks.length} tasks, ${data.sections.length} sections.`, 'success');
         showConfluenceResult('Page Summary', data.summary);
       } catch (e) {
-        setConfluenceMsg('Error: ' + e.message, 'error');
+        console.error('[Confluence] Preview error:', e);
+        const msg = e.message.includes('Failed to fetch') || e.message.includes('NetworkError')
+          ? 'CORS or network error fetching Confluence. Are you on TD VPN/network? Open browser console for details.'
+          : 'Error: ' + e.message;
+        setConfluenceMsg(msg, 'error');
       } finally {
         btn.disabled = false;
         btn.textContent = 'Preview Page Structure (no Claude)';
@@ -898,25 +950,31 @@
 
       btn.disabled = true;
       btn.textContent = 'Working...';
-      setConfluenceMsg('Fetching page and asking Claude to fill checklist...', '');
       document.getElementById('confluenceResult').style.display = 'none';
 
       try {
+        setConfluenceMsg('Step 1/3: Browser fetching Confluence page...', '');
+        const { title, rawHtml } = await fetchConfluencePageFromBrowser(url);
+
+        setConfluenceMsg('Step 2/3: Parsing checklist + sending to Claude...', '');
+        console.log('[Confluence] Sending rawHtml to backend. Length:', rawHtml.length);
+
         const res = await fetch('/api/confluence/fill', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, context }),
+          body: JSON.stringify({ rawHtml, title, context }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Fill failed');
 
         setConfluenceMsg(`Done! ${data.tasks.length} tasks found and filled.`, 'success');
-        showConfluenceResult(
-          `Filled Checklist — ${data.title}`,
-          data.filledReport
-        );
+        showConfluenceResult(`Filled Checklist — ${data.title}`, data.filledReport);
       } catch (e) {
-        setConfluenceMsg('Error: ' + e.message, 'error');
+        console.error('[Confluence] Fill error:', e);
+        const msg = e.message.includes('Failed to fetch') || e.message.includes('NetworkError')
+          ? 'CORS or network error fetching Confluence. Are you on TD VPN/network? Open browser console for details.'
+          : 'Error: ' + e.message;
+        setConfluenceMsg(msg, 'error');
       } finally {
         btn.disabled = false;
         btn.textContent = 'Generate Filled Checklist';
