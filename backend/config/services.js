@@ -41,6 +41,7 @@ const HealthChecker = require('../services/utils/HealthChecker');
 
 // Controllers
 const ChatController = require('../controllers/ChatController');
+const ConfluenceController = require('../controllers/ConfluenceController');
 
 function initializeServices() {
   // Initialize utility services
@@ -95,6 +96,8 @@ function initializeServices() {
   });
 
   // Initialize controllers
+  const confluenceController = new ConfluenceController({ claudeClient, logger });
+
   const chatController = new ChatController({
     claudeClient,
     conversationManager,
@@ -149,6 +152,7 @@ function initializeServices() {
 
     // Controllers
     chatController,
+    confluenceController,
   };
 }
 

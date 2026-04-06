@@ -5,6 +5,7 @@ const initializeServices = require('./config/services');
 const chatRoutes = require('./routes/chat');
 const healthRoutes = require('./routes/health');
 const storageRoutes = require('./routes/storage');
+const confluenceRoutes = require('./routes/confluence');
 const corsHandler = require('./middleware/corsHandler');
 const errorHandler = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/requestLogger');
@@ -28,6 +29,10 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 app.use('/api/chat', chatRoutes(services.chatController));
 app.use('/api/health', healthRoutes(services.healthChecker));
 app.use('/api/storage', storageRoutes);
+const confluenceRouter = confluenceRoutes(services.confluenceController);
+console.log('[Startup] Confluence controller:', typeof services.confluenceController);
+console.log('[Startup] Confluence router type:', typeof confluenceRouter);
+app.use('/api/confluence', confluenceRouter);
 
 // Root endpoint
 app.get('/api', (req, res) => {

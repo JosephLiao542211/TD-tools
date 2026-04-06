@@ -637,6 +637,85 @@
     .storage-msg { margin-top: 6px; font-size: 12px; }
     .storage-msg.error { color: #f85149; }
     .storage-msg.success { color: #3fb950; }
+
+    /* Confluence panel */
+    .confluence-toggle {
+      position: fixed;
+      top: 16px;
+      right: 120px;
+      background: #1f6feb;
+      border: 1px solid #1f6feb;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      z-index: 100;
+      font-weight: 600;
+    }
+    .confluence-toggle:hover { background: #388bfd; }
+
+    .confluence-panel {
+      display: none;
+      position: fixed;
+      top: 50px;
+      right: 16px;
+      width: 480px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      font-size: 13px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .confluence-panel.open { display: block; }
+    .confluence-panel h3 { color: #1f6feb; margin-bottom: 12px; font-size: 13px; }
+    .confluence-panel label { display: block; color: #8b949e; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; }
+    .confluence-panel input[type="text"],
+    .confluence-panel textarea {
+      width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+      padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;
+      outline: none; box-sizing: border-box; margin-bottom: 10px;
+    }
+    .confluence-panel textarea { resize: vertical; min-height: 60px; }
+    .confluence-btn {
+      width: 100%; background: #1f6feb; border: none; color: white;
+      padding: 8px; border-radius: 4px; font-family: inherit; font-size: 12px;
+      font-weight: 600; cursor: pointer; margin-top: 2px;
+    }
+    .confluence-btn:hover { background: #388bfd; }
+    .confluence-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .confluence-btn.secondary {
+      background: #21262d; border: 1px solid #30363d; color: #8b949e; margin-top: 6px;
+    }
+    .confluence-btn.secondary:hover { background: #30363d; color: #c9d1d9; }
+    .confluence-result {
+      display: none; margin-top: 12px; border-top: 1px solid #30363d; padding-top: 12px;
+    }
+    .confluence-result-title { color: #58a6ff; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .confluence-result-body {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+      padding: 10px; font-size: 12px; color: #c9d1d9; white-space: pre-wrap;
+      max-height: 300px; overflow-y: auto; line-height: 1.5;
+    }
+    .confluence-copy-btn {
+      width: 100%; background: #238636; border: none; color: white;
+      padding: 6px; border-radius: 4px; font-family: inherit; font-size: 11px;
+      font-weight: 600; cursor: pointer; margin-top: 6px;
+    }
+    .confluence-copy-btn:hover { background: #2ea043; }
+    .confluence-msg { margin-top: 6px; font-size: 12px; }
+    .confluence-msg.error { color: #f85149; }
+    .confluence-msg.success { color: #3fb950; }
+    .confluence-tasks-preview {
+      background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+      padding: 8px; margin-bottom: 10px; font-size: 11px; color: #8b949e;
+      max-height: 100px; overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -689,8 +768,39 @@
     </div>
   </div>
 
+  <!-- Confluence Panel -->
+  <button class="confluence-toggle" onclick="toggleConfluence()">&#128196; Handover</button>
+  <div class="confluence-panel" id="confluencePanel">
+    <h3>&#128196; Confluence Handover Filler</h3>
+
+    <label>Confluence Page URL</label>
+    <input type="text" id="confluenceUrl"
+      value="https://collaborate.td.com/spaces/CSTSFRAUD/pages/3555396744/DSAP+-+TMX-OFSI"
+      placeholder="https://collaborate.td.com/spaces/.../pages/..." />
+
+    <label>Extra Context (optional)</label>
+    <textarea id="confluenceContext" placeholder="e.g. Customer called in, transaction was $2,400 on Apr 3rd, account flagged by TMX..."></textarea>
+
+    <div id="confluenceTasksPreview" class="confluence-tasks-preview" style="display:none"></div>
+
+    <button class="confluence-btn" id="confluenceFillBtn" onclick="confluenceFill()">
+      Generate Filled Checklist
+    </button>
+    <button class="confluence-btn secondary" id="confluencePreviewBtn" onclick="confluencePreview()">
+      Preview Page Structure (no Claude)
+    </button>
+
+    <div class="confluence-msg" id="confluenceMsg"></div>
+
+    <div class="confluence-result" id="confluenceResult">
+      <div class="confluence-result-title" id="confluenceResultTitle"></div>
+      <div class="confluence-result-body" id="confluenceResultBody"></div>
+      <button class="confluence-copy-btn" onclick="copyConfluenceResult()">Copy to Clipboard</button>
+    </div>
+  </div>
+
   <!-- Storage Panel -->
-  <button class="storage-toggle" onclick="toggleStorage()">⬆ Storage</button>
+  <button class="storage-toggle" onclick="toggleStorage()">&#11014; Storage</button>
   <div class="storage-panel" id="storagePanel">
     <h3>⬆ Temp File Storage</h3>
 
@@ -714,8 +824,111 @@
   </div>
 
   <script>
+    // ── Confluence Panel ──────────────────────────────────────────────────────
+
+    function toggleConfluence() {
+      const panel = document.getElementById('confluencePanel');
+      panel.classList.toggle('open');
+      // Close storage if open
+      document.getElementById('storagePanel').classList.remove('open');
+    }
+
+    function setConfluenceMsg(text, type) {
+      const el = document.getElementById('confluenceMsg');
+      el.textContent = text;
+      el.className = 'confluence-msg ' + (type || '');
+    }
+
+    function showConfluenceResult(title, body) {
+      document.getElementById('confluenceResultTitle').textContent = title;
+      document.getElementById('confluenceResultBody').textContent = body;
+      document.getElementById('confluenceResult').style.display = 'block';
+    }
+
+    function copyConfluenceResult() {
+      const text = document.getElementById('confluenceResultBody').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        setConfluenceMsg('Copied to clipboard!', 'success');
+      }).catch(() => setConfluenceMsg('Copy failed — select text manually.', 'error'));
+    }
+
+    async function confluencePreview() {
+      const url = document.getElementById('confluenceUrl').value.trim();
+      const btn = document.getElementById('confluencePreviewBtn');
+      const preview = document.getElementById('confluenceTasksPreview');
+
+      if (!url) { setConfluenceMsg('Enter a Confluence URL first.', 'error'); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+      setConfluenceMsg('Fetching page structure...', '');
+      preview.style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/confluence/preview?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Preview failed');
+
+        const taskLines = data.tasks.length > 0
+          ? data.tasks.map(t => `${t.status === 'complete' ? '[x]' : '[ ]'} ${t.body}`).join('\n')
+          : '(no ac:task-list items found)';
+
+        const sectionLines = data.sections.map(s => `  ${s.heading}`).join('\n');
+
+        preview.style.display = 'block';
+        preview.textContent =
+          `Tasks (${data.tasks.length}):\n${taskLines}\n\nSections (${data.sections.length}):\n${sectionLines}`;
+
+        setConfluenceMsg(`Found ${data.tasks.length} tasks, ${data.sections.length} sections.`, 'success');
+        showConfluenceResult('Page Summary', data.summary);
+      } catch (e) {
+        setConfluenceMsg('Error: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Preview Page Structure (no Claude)';
+      }
+    }
+
+    async function confluenceFill() {
+      const url = document.getElementById('confluenceUrl').value.trim();
+      const context = document.getElementById('confluenceContext').value.trim();
+      const btn = document.getElementById('confluenceFillBtn');
+
+      if (!url) { setConfluenceMsg('Enter a Confluence URL first.', 'error'); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Working...';
+      setConfluenceMsg('Fetching page and asking Claude to fill checklist...', '');
+      document.getElementById('confluenceResult').style.display = 'none';
+
+      try {
+        const res = await fetch('/api/confluence/fill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, context }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Fill failed');
+
+        setConfluenceMsg(`Done! ${data.tasks.length} tasks found and filled.`, 'success');
+        showConfluenceResult(
+          `Filled Checklist — ${data.title}`,
+          data.filledReport
+        );
+      } catch (e) {
+        setConfluenceMsg('Error: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate Filled Checklist';
+      }
+    }
+  </script>
+
+  <script>
     function toggleStorage() {
       document.getElementById('storagePanel').classList.toggle('open');
+      // Close confluence if open
+      document.getElementById('confluencePanel').classList.remove('open');
     }
 
     async function uploadFile() {

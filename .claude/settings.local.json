@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(node -e \"console.log\\(process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy || '\\(none\\)'\\)\")",
+      "Bash(node -e \"const dns = require\\('dns'\\); dns.lookup\\('collaborate.td.com', \\(err, addr\\) => console.log\\(err ? 'DNS FAIL: ' + err.message : 'DNS OK: ' + addr\\)\\)\")"
     ]
   }
 }
